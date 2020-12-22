@@ -18,15 +18,16 @@ let beerReducer = Reducer<Beer, BeerActions, BeerListEnvironment> {
     case .updateMalts(let val):
         state.malt = val
     case .updateImage(let img):
-        state.image = img!
+        guard let img = img else { return .none }
+        state.image = img
     }
     return .none
 }
 
 struct BeerCardView: View {
     var store: Store<Beer, BeerActions>
-    @State private var isDisclosed = true
-    @State private var isEditing = true
+    @State private var isDisclosed = false
+    @State private var isEditing = false
     @State private var isShowingPhotoLibrary = false
     
     var body: some View {
@@ -35,25 +36,28 @@ struct BeerCardView: View {
                 ZStack(alignment: .topTrailing) {
                     HStack {
                         if isDisclosed { Spacer() }
-                        ZStack(alignment: .topTrailing) {
-                            Image(uiImage: viewStore.image!)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 150, height: 150, alignment: .center)
-                                .padding(.leading, 12)
-                                .opacity(isEditing ? 0.5 : 1)
-                            if isEditing {
-                                Button(action: {
-                                    isShowingPhotoLibrary = true
-                                }, label: {
-                                    Image(systemName: "camera.on.rectangle.fill")
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fit)
-                                        .foregroundColor(.init(white: 0.4))
-                                })
-                                .frame(width: 44, height: 44, alignment: .center)
-                            }
+                        ZStack {
+                            Button(action: {
+                                guard isEditing else { return }
+                                isShowingPhotoLibrary = true
+                            }, label: {
+                                Image(uiImage: isEditing ?
+                                        UIImage(systemName: "camera.on.rectangle.fill")! :
+                                        viewStore.image!)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .foregroundColor(isEditing ? .init(white: 0.4) : .none)
+                                    .padding(isEditing ? 32 : 0)
+                                    .frame(width: 150, height: 150, alignment: .center)
+                                    .background(Color.white)
+                                    .cornerRadius(25)
+                                    .shadow(radius: 5)
+                            })
+
                         }
+                        .rotation3DEffect(
+                            isEditing ? .init(degrees: 180) : .zero,
+                            axis: (x: 0.0, y: 1.0, z: 0.0))
                         if isDisclosed {
                             Spacer()
                         } else {
@@ -66,21 +70,23 @@ struct BeerCardView: View {
                                        maxHeight: .infinity)
                         }
                     }
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6, blendDuration: 0.5)) {
-                            if isEditing {
-                                isEditing = false
+                    if !isEditing {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3,
+                                                  dampingFraction: 0.6,
+                                                  blendDuration: 0.5)) {
+                                if isEditing { isEditing = false }
+                                isDisclosed.toggle()
                             }
-                            isDisclosed.toggle()
-                        }
-                    }, label: {
-                        Image(systemName: isDisclosed ? "minus" : "plus")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .padding([.top, .trailing], 12)
-                    })
-                    .frame(width: 44, height: 44, alignment: .center)
-                    .foregroundColor(.init(white: 0.4))
+                        }, label: {
+                            Image(systemName: isDisclosed ? "minus" : "plus")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .padding([.top, .trailing], 12)
+                        })
+                        .frame(width: 44, height: 44, alignment: .center)
+                        .foregroundColor(.init(white: 0.4))
+                    }
                 }
                 if isDisclosed {
                     BeerPropertiesView(isEditing: $isEditing, store: store)
@@ -89,16 +95,15 @@ struct BeerCardView: View {
             .background(Color.init(.secondarySystemBackground))
             .cornerRadius(20)
             .shadow(radius: 5)
-            .padding([.leading, .trailing], 12)
-//            .sheet(isPresented: $isShowingPhotoLibrary) {
-//                isShowingPhotoLibrary = false
-//            } content: {
-//                ImagePicker(sourceType: .photoLibrary,
-//                            isShown: $isShowingPhotoLibrary,
-//                            uiImage: viewStore.binding(
-//                                get: \.image,
-//                                send: BeerActions.updateImage))
-//            }
+            .sheet(isPresented: $isShowingPhotoLibrary) {
+                isShowingPhotoLibrary = false
+            } content: {
+                ImagePicker(sourceType: .photoLibrary,
+                            isShown: $isShowingPhotoLibrary,
+                            uiImage: viewStore.binding(
+                                get: \.image,
+                                send: BeerActions.updateImage))
+            }
         }
     }
 }
@@ -147,32 +152,22 @@ struct BeerEditingButtons: View {
     var store: Store<Beer, BeerActions>
     
     var body: some View {
-        HStack(spacing: 0) {
-            Button(action: {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    isEditing.toggle()
-                }
-            }, label: {
-                Text(isEditing ? "Save" : "Edit")
-                    .font(.system(size: 18, weight: .bold))
-            }).frame(minWidth: 0,
-                     maxWidth: .infinity,
-                     minHeight: 44)
-            .foregroundColor(.white)
-            .background(Color.blue)
-            .cornerRadius(20, corners: [.bottomLeft])
-            Button(action: {
-                print("xx")
-            }, label: {
-                Text("Remove")
-                    .font(.system(size: 18, weight: .bold))
-            }).frame(minWidth: 0,
-                     maxWidth: !isEditing ? .infinity : .zero,
-                     minHeight: 44,
-                     maxHeight: 44)
-            .foregroundColor(.white)
-            .background(Color.red)
-            .cornerRadius(20, corners: [.bottomRight])
+        WithViewStore(store) { viewStore in
+            HStack(spacing: 0) {
+                Button(action: {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        isEditing.toggle()
+                    }
+                }, label: {
+                    Text(isEditing ? "Save" : "Edit")
+                        .font(.system(size: 18, weight: .bold))
+                }).frame(minWidth: 0,
+                         maxWidth: .infinity,
+                         minHeight: 44)
+                .foregroundColor(.white)
+                .background(Color.blue)
+                .cornerRadius(20, corners: [.bottomLeft])
+            }
         }
     }
 }
