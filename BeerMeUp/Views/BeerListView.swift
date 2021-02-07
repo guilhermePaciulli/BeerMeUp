@@ -38,7 +38,7 @@ let beerListReducer = Reducer<BeerListState, BeerListActions, BeerListEnvironmen
 
 struct BeerListView: View {
     let store: Store<BeerListState, BeerListActions>
-    @State var isDeleting = true
+    @State var isDeleting = false
     
     var body: some View {
         NavigationView {
